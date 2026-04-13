@@ -32,10 +32,11 @@ INSTALL:
 
 API KEYS — ask the user for these:
 
-  export OPENAI_API_KEY=sk-...          # required for vector search
-  export ANTHROPIC_API_KEY=sk-ant-...   # optional, improves search quality
-  Save to shell profile or .env. Without OpenAI, keyword search still
-  works. Without Anthropic, search works but skips query expansion.
+  export OPENROUTER_API_KEY=sk-or-...   # vector search + query expansion
+  export GBRAIN_EMBEDDING_MODEL=openai/text-embedding-3-large
+  export GBRAIN_EXPANSION_MODEL=openai/gpt-4o-mini
+  Save to shell profile or .env. Without OpenRouter, keyword search still
+  works. OPENAI_API_KEY and ANTHROPIC_API_KEY remain fallback options.
 
 SET UP THE BRAIN:
 
@@ -231,19 +232,21 @@ You take a meeting with someone. The agent writes a brain page for them, links i
 | Dependency | What it's for | How to get it |
 |------------|--------------|---------------|
 | **Supabase account** | Postgres + pgvector database | [supabase.com](https://supabase.com) (Pro tier, $25/mo for 8GB) |
-| **OpenAI API key** | Embeddings (text-embedding-3-large) | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| **Anthropic API key** | Multi-query expansion + LLM chunking (Haiku) | [console.anthropic.com](https://console.anthropic.com) |
+| **OpenRouter API key** | Embeddings + multi-query expansion | [openrouter.ai](https://openrouter.ai) |
+| **OpenAI API key** | Fallback embeddings provider | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| **Anthropic API key** | Fallback multi-query expansion provider | [console.anthropic.com](https://console.anthropic.com) |
 
-Set the API keys as environment variables:
+Set the API key and model choices as environment variables:
 
 ```bash
-export OPENAI_API_KEY=sk-...
-export ANTHROPIC_API_KEY=sk-ant-...
+export OPENROUTER_API_KEY=sk-or-...
+export GBRAIN_EMBEDDING_MODEL=openai/text-embedding-3-large
+export GBRAIN_EXPANSION_MODEL=openai/gpt-4o-mini
 ```
 
-The Supabase connection URL is configured during `gbrain init --supabase`. The OpenAI and Anthropic SDKs read their keys from the environment automatically.
+The Supabase connection URL is configured during `gbrain init --supabase`. OpenRouter is used for both vector embeddings and multi-query expansion when `OPENROUTER_API_KEY` is set. `GBRAIN_EMBEDDING_MODEL` and `GBRAIN_EXPANSION_MODEL` are independent.
 
-Without an OpenAI key, search still works (keyword only, no vector search). Without an Anthropic key, search still works (no multi-query expansion, no LLM chunking).
+Without an OpenRouter, OpenAI, or Anthropic key, search still works keyword-only. Embedding models must return 1536-dimensional vectors for the current pgvector schema.
 
 ### GBrain without OpenClaw
 
@@ -471,7 +474,7 @@ The compiled truth is the answer. The timeline is the proof.
 ```
 Query: "when should you ignore conventional wisdom?"
          |
-    Multi-query expansion (Claude Haiku)
+    Multi-query expansion (OpenRouter chat model)
     "contrarian thinking startups", "going against the crowd"
          |
     +----+----+

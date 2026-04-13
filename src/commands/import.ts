@@ -33,9 +33,10 @@ export async function runImport(engine: BrainEngine, args: string[]) {
     console.error('Usage: gbrain import <dir> [--no-embed] [--workers N] [--fresh] [--json]');
     process.exit(1);
   }
+  const importDir = dir;
 
   // Collect all .md files
-  const allFiles = collectMarkdownFiles(dir);
+  const allFiles = collectMarkdownFiles(importDir);
   console.log(`Found ${allFiles.length} markdown files`);
 
   // Resume from checkpoint if available
@@ -46,7 +47,7 @@ export async function runImport(engine: BrainEngine, args: string[]) {
   if (!fresh && existsSync(checkpointPath)) {
     try {
       const cp = JSON.parse(readFileSync(checkpointPath, 'utf-8'));
-      if (cp.dir === dir && cp.totalFiles === allFiles.length) {
+      if (cp.dir === importDir && cp.totalFiles === allFiles.length) {
         resumeIndex = cp.processedIndex;
         files = allFiles.slice(resumeIndex);
         console.log(`Resuming from checkpoint: skipping ${resumeIndex} already-processed files`);
@@ -80,7 +81,7 @@ export async function runImport(engine: BrainEngine, args: string[]) {
   }
 
   async function processFile(eng: BrainEngine, filePath: string) {
-    const relativePath = relative(dir, filePath);
+    const relativePath = relative(importDir, filePath);
     try {
       const result = await importFile(eng, filePath, relativePath, { noEmbed });
       if (result.status === 'imported') {
@@ -114,7 +115,7 @@ export async function runImport(engine: BrainEngine, args: string[]) {
           const cpDir = join(homedir(), '.gbrain');
           if (!existsSync(cpDir)) { const { mkdirSync } = await import('fs'); mkdirSync(cpDir, { recursive: true }); }
           writeFileSync(checkpointPath, JSON.stringify({
-            dir, totalFiles: allFiles.length,
+            dir: importDir, totalFiles: allFiles.length,
             processedIndex: resumeIndex + processed,
             completedFiles: importedSlugs.length + skipped,
             timestamp: new Date().toISOString(),
@@ -193,18 +194,18 @@ export async function runImport(engine: BrainEngine, args: string[]) {
   // Log the ingest
   await engine.logIngest({
     source_type: 'directory',
-    source_ref: dir,
+    source_ref: importDir,
     pages_updated: importedSlugs,
     summary: `Imported ${imported} pages, ${skipped} skipped, ${chunksCreated} chunks`,
   });
 
   // Import → sync continuity: write sync checkpoint if this is a git repo
   try {
-    if (existsSync(join(dir, '.git'))) {
-      const head = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+    if (existsSync(join(importDir, '.git'))) {
+      const head = execFileSync('git', ['-C', importDir, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
       await engine.setConfig('sync.last_commit', head);
       await engine.setConfig('sync.last_run', new Date().toISOString());
-      await engine.setConfig('sync.repo_path', dir);
+      await engine.setConfig('sync.repo_path', importDir);
     }
   } catch {
     // Not a git repo or git not available, skip checkpoint
