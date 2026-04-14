@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { EngineConfig } from './types.ts';
+import type { StorageConfig } from './storage.ts';
 
 // Lazy-evaluated to avoid calling homedir() at module scope (breaks in serverless/bundled environments)
 function getConfigDir() { return join(homedir(), '.gbrain'); }
@@ -11,8 +12,14 @@ export interface GBrainConfig {
   engine: 'postgres' | 'pglite';
   database_url?: string;
   database_path?: string;
+  openrouter_api_key?: string;
   openai_api_key?: string;
   anthropic_api_key?: string;
+  embedding_provider?: 'openai' | 'openrouter';
+  embedding_model?: string;
+  expansion_provider?: 'anthropic' | 'openrouter';
+  expansion_model?: string;
+  storage?: StorageConfig;
 }
 
 /**
@@ -40,7 +47,13 @@ export function loadConfig(): GBrainConfig | null {
     ...fileConfig,
     engine: inferredEngine,
     ...(dbUrl ? { database_url: dbUrl } : {}),
+    ...(process.env.OPENROUTER_API_KEY ? { openrouter_api_key: process.env.OPENROUTER_API_KEY } : {}),
     ...(process.env.OPENAI_API_KEY ? { openai_api_key: process.env.OPENAI_API_KEY } : {}),
+    ...(process.env.ANTHROPIC_API_KEY ? { anthropic_api_key: process.env.ANTHROPIC_API_KEY } : {}),
+    ...(process.env.GBRAIN_EMBEDDING_PROVIDER ? { embedding_provider: process.env.GBRAIN_EMBEDDING_PROVIDER } : {}),
+    ...(process.env.GBRAIN_EMBEDDING_MODEL ? { embedding_model: process.env.GBRAIN_EMBEDDING_MODEL } : {}),
+    ...(process.env.GBRAIN_EXPANSION_PROVIDER ? { expansion_provider: process.env.GBRAIN_EXPANSION_PROVIDER } : {}),
+    ...(process.env.GBRAIN_EXPANSION_MODEL ? { expansion_model: process.env.GBRAIN_EXPANSION_MODEL } : {}),
   };
   return merged as GBrainConfig;
 }

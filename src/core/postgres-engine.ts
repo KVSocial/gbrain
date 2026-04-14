@@ -4,7 +4,7 @@ import { MAX_SEARCH_LIMIT, clampSearchLimit } from './engine.ts';
 import { runMigrations } from './migrate.ts';
 import { SCHEMA_SQL } from './schema-embedded.ts';
 import type {
-  Page, PageInput, PageFilters,
+  Page, PageInput, PageFilters, PageType,
   Chunk, ChunkInput,
   SearchResult, SearchOpts,
   Link, GraphNode,
@@ -82,7 +82,7 @@ export class PostgresEngine implements BrainEngine {
       Object.defineProperty(txEngine, 'sql', { get: () => tx });
       Object.defineProperty(txEngine, '_sql', { value: tx as unknown as ReturnType<typeof postgres>, writable: false });
       return fn(txEngine);
-    });
+    }) as Promise<T>;
   }
 
   // Pages CRUD
@@ -93,7 +93,7 @@ export class PostgresEngine implements BrainEngine {
       FROM pages WHERE slug = ${slug}
     `;
     if (rows.length === 0) return null;
-    return rowToPage(rows[0]);
+    return rowToPage(rows[0] as Record<string, unknown>);
   }
 
   async putPage(slug: string, page: PageInput): Promise<Page> {
@@ -115,7 +115,7 @@ export class PostgresEngine implements BrainEngine {
         updated_at = now()
       RETURNING id, slug, type, title, compiled_truth, timeline, frontmatter, content_hash, created_at, updated_at
     `;
-    return rowToPage(rows[0]);
+    return rowToPage(rows[0] as Record<string, unknown>);
   }
 
   async deletePage(slug: string): Promise<void> {
@@ -155,7 +155,7 @@ export class PostgresEngine implements BrainEngine {
       `;
     }
 
-    return rows.map(rowToPage);
+    return rows.map((row) => rowToPage(row as Record<string, unknown>));
   }
 
   async resolveSlugs(partial: string): Promise<string[]> {
@@ -173,7 +173,7 @@ export class PostgresEngine implements BrainEngine {
       ORDER BY sim DESC
       LIMIT 5
     `;
-    return fuzzy.map((r: { slug: string }) => r.slug);
+    return fuzzy.map((r) => (r as { slug: string }).slug);
   }
 
   // Search
@@ -329,7 +329,7 @@ export class PostgresEngine implements BrainEngine {
          model = COALESCE(EXCLUDED.model, content_chunks.model),
          token_count = EXCLUDED.token_count,
          embedded_at = COALESCE(EXCLUDED.embedded_at, content_chunks.embedded_at)`,
-      params,
+      params as any[],
     );
   }
 
@@ -341,7 +341,7 @@ export class PostgresEngine implements BrainEngine {
       WHERE p.slug = ${slug}
       ORDER BY cc.chunk_index
     `;
-    return rows.map(rowToChunk);
+    return rows.map((row) => rowToChunk(row as Record<string, unknown>));
   }
 
   async deleteChunks(slug: string): Promise<void> {
@@ -428,13 +428,16 @@ export class PostgresEngine implements BrainEngine {
       ORDER BY g.depth, g.slug
     `;
 
-    return rows.map((r: Record<string, unknown>) => ({
+    return rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
       slug: r.slug as string,
       title: r.title as string,
       type: r.type as PageType,
       depth: r.depth as number,
       links: (typeof r.links === 'string' ? JSON.parse(r.links) : r.links) as { to_slug: string; link_type: string }[],
-    }));
+      };
+    });
   }
 
   // Tags
@@ -467,7 +470,7 @@ export class PostgresEngine implements BrainEngine {
       WHERE page_id = (SELECT id FROM pages WHERE slug = ${slug})
       ORDER BY tag
     `;
-    return rows.map((r: { tag: string }) => r.tag);
+    return rows.map((r) => (r as { tag: string }).tag);
   }
 
   // Timeline

@@ -55,7 +55,7 @@ export class SupabaseStorage implements StorageBackend {
         'Content-Type': mime || 'application/octet-stream',
         'x-upsert': 'true',
       },
-      body: data,
+      body: data as unknown as BodyInit,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -126,7 +126,7 @@ export class SupabaseStorage implements StorageBackend {
               'Content-Type': 'application/offset+octet-stream',
               'Content-Length': String(chunk.length),
             },
-            body: chunk,
+            body: chunk as unknown as BodyInit,
           });
 
           if (!patchRes.ok) {

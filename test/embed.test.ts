@@ -9,18 +9,24 @@ let maxConcurrentEmbedCalls = 0;
 let totalEmbedCalls = 0;
 
 mock.module('../src/core/embedding.ts', () => ({
-  embedBatch: async (texts: string[]) => {
-    activeEmbedCalls++;
-    totalEmbedCalls++;
-    if (activeEmbedCalls > maxConcurrentEmbedCalls) {
-      maxConcurrentEmbedCalls = activeEmbedCalls;
-    }
-    // Simulate API latency so concurrent workers actually overlap.
-    await new Promise(r => setTimeout(r, 30));
-    activeEmbedCalls--;
-    return texts.map(() => new Float32Array(1536));
+  embed: async (text: string) => {
+    const [embedding] = await mockEmbedBatch([text]);
+    return embedding;
   },
+  embedBatch: mockEmbedBatch,
 }));
+
+async function mockEmbedBatch(texts: string[]): Promise<Float32Array[]> {
+  activeEmbedCalls++;
+  totalEmbedCalls++;
+  if (activeEmbedCalls > maxConcurrentEmbedCalls) {
+    maxConcurrentEmbedCalls = activeEmbedCalls;
+  }
+  // Simulate API latency so concurrent workers actually overlap.
+  await new Promise(r => setTimeout(r, 30));
+  activeEmbedCalls--;
+  return texts.map(() => new Float32Array(1536));
+}
 
 // Import AFTER mocking.
 const { runEmbed } = await import('../src/commands/embed.ts');
