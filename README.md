@@ -248,6 +248,61 @@ The Supabase connection URL is configured during `gbrain init --supabase`. OpenR
 
 Without an OpenRouter, OpenAI, or Anthropic key, search still works keyword-only. Embedding models must return 1536-dimensional vectors for the current pgvector schema.
 
+### Custom experimental OpenRouter edit
+
+This branch includes a custom experimental OpenRouter provider path. It lets one OpenRouter API key drive both embeddings and multi-query expansion, while still choosing separate models for each job.
+
+Use it by exporting the key and model names before running `gbrain`:
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+
+# Embeddings: must return 1536 dimensions for the current pgvector schema.
+export GBRAIN_EMBEDDING_MODEL=openai/text-embedding-3-large
+
+# Multi-query expansion: any OpenRouter chat model that can return JSON.
+export GBRAIN_EXPANSION_MODEL=openai/gpt-4o-mini
+```
+
+Then run the normal indexing and query flow:
+
+```bash
+gbrain init
+gbrain import ~/brain/ --no-embed
+gbrain embed --stale
+gbrain query "what should I know about this topic?"
+```
+
+Provider selection is automatic. If `OPENROUTER_API_KEY` is set, embeddings use OpenRouter by default and query expansion uses OpenRouter by default. If it is not set, embeddings fall back to `OPENAI_API_KEY` and expansion falls back to `ANTHROPIC_API_KEY`.
+
+To force a provider explicitly, set:
+
+```bash
+export GBRAIN_EMBEDDING_PROVIDER=openrouter   # or openai
+export GBRAIN_EXPANSION_PROVIDER=openrouter   # or anthropic
+```
+
+The same settings can also live in `~/.gbrain/config.json`; environment variables win when both are present:
+
+```json
+{
+  "openrouter_api_key": "sk-or-...",
+  "embedding_provider": "openrouter",
+  "embedding_model": "openai/text-embedding-3-large",
+  "expansion_provider": "openrouter",
+  "expansion_model": "openai/gpt-4o-mini"
+}
+```
+
+Optional OpenRouter attribution headers are supported:
+
+```bash
+export OPENROUTER_HTTP_REFERER=https://github.com/KVSocial/gbrain
+export OPENROUTER_APP_TITLE=GBrain
+```
+
+This is experimental branch behavior, not the original upstream default. Keep the embedding model dimension-compatible until the database schema supports mixed vector sizes.
+
 ### GBrain without OpenClaw
 
 GBrain works with any AI agent, any MCP client, or no agent at all. Three paths:
