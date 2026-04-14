@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  DEFAULT_EMBEDDING_DIMENSIONS,
   OPENROUTER_BASE_URL,
   resolveEmbeddingConfig,
+  resolveEmbeddingDimensions,
   resolveExpansionConfig,
 } from '../src/core/ai-config.ts';
+import { schemaWithEmbeddingDimensions } from '../src/core/schema-dimensions.ts';
 import { buildOpenRouterEmbeddingBody, normalizeEmbedding } from '../src/core/embedding-utils.ts';
 import { expandQuery, parseExpansionJson } from '../src/core/search/expansion.ts';
 
@@ -13,6 +16,7 @@ const ENV_KEYS = [
   'ANTHROPIC_API_KEY',
   'GBRAIN_EMBEDDING_PROVIDER',
   'GBRAIN_EMBEDDING_MODEL',
+  'GBRAIN_EMBEDDING_DIMENSIONS',
   'GBRAIN_EXPANSION_PROVIDER',
   'GBRAIN_EXPANSION_MODEL',
   'OPENROUTER_HTTP_REFERER',
@@ -46,6 +50,7 @@ describe('OpenRouter provider config', () => {
   test('uses one OpenRouter key with independent embedding and expansion models', () => {
     process.env.OPENROUTER_API_KEY = 'sk-or-test';
     process.env.GBRAIN_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+    process.env.GBRAIN_EMBEDDING_DIMENSIONS = '4096';
     process.env.GBRAIN_EXPANSION_MODEL = 'openai/gpt-4o-mini';
 
     const embedding = resolveEmbeddingConfig();
@@ -54,9 +59,42 @@ describe('OpenRouter provider config', () => {
     expect(embedding.provider).toBe('openrouter');
     expect(embedding.apiKey).toBe('sk-or-test');
     expect(embedding.model).toBe('openai/text-embedding-3-small');
+    expect(embedding.dimensions).toBe(4096);
     expect(expansion.provider).toBe('openrouter');
     expect(expansion.apiKey).toBe('sk-or-test');
     expect(expansion.model).toBe('openai/gpt-4o-mini');
+  });
+
+  test('defaults embedding dimensions to 1536 when unset', () => {
+    expect(resolveEmbeddingDimensions()).toBe(DEFAULT_EMBEDDING_DIMENSIONS);
+  });
+
+  test('rejects invalid embedding dimensions', () => {
+    process.env.GBRAIN_EMBEDDING_DIMENSIONS = 'not-a-number';
+    expect(() => resolveEmbeddingDimensions()).toThrow('positive integer');
+  });
+});
+
+describe('OpenRouter schema dimensions', () => {
+  test('renders new brain schema with configured embedding dimensions', () => {
+    const sql = schemaWithEmbeddingDimensions(`
+      CREATE TABLE content_chunks (embedding vector(1536));
+      INSERT INTO config (key, value) VALUES ('embedding_dimensions', '1536');
+      CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON content_chunks USING hnsw (embedding vector_cosine_ops);
+    `, 4096);
+
+    expect(sql).toContain('embedding vector(4096)');
+    expect(sql).toContain("('embedding_dimensions', '4096')");
+    expect(sql).not.toContain('USING hnsw');
+  });
+
+  test('preserves HNSW index for default dimensions', () => {
+    const sql = schemaWithEmbeddingDimensions(
+      'CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON content_chunks USING hnsw (embedding vector_cosine_ops);',
+      1536,
+    );
+
+    expect(sql).toContain('USING hnsw');
   });
 });
 

@@ -246,23 +246,26 @@ export GBRAIN_EXPANSION_MODEL=openai/gpt-4o-mini
 
 The Supabase connection URL is configured during `gbrain init --supabase`. OpenRouter is used for both vector embeddings and multi-query expansion when `OPENROUTER_API_KEY` is set. `GBRAIN_EMBEDDING_MODEL` and `GBRAIN_EXPANSION_MODEL` are independent.
 
-Without an OpenRouter, OpenAI, or Anthropic key, search still works keyword-only. Embedding models must return 1536-dimensional vectors for the current pgvector schema.
+Without an OpenRouter, OpenAI, or Anthropic key, search still works keyword-only. Embedding models must match the brain schema's vector dimensions; the default is 1536.
 
 ### Custom experimental OpenRouter edit
 
 This branch includes a custom experimental OpenRouter provider path. It lets one OpenRouter API key drive both embeddings and multi-query expansion, while still choosing separate models for each job.
 
-Use it by exporting the key and model names before running `gbrain`:
+Use it by exporting the key, embedding model, embedding dimensions, and expansion model before running `gbrain`:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 
-# Embeddings: must return 1536 dimensions for the current pgvector schema.
-export GBRAIN_EMBEDDING_MODEL=openai/text-embedding-3-large
+# Embeddings: must match the brain schema vector dimensions.
+export GBRAIN_EMBEDDING_DIMENSIONS=4096
+export GBRAIN_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
 
 # Multi-query expansion: any OpenRouter chat model that can return JSON.
 export GBRAIN_EXPANSION_MODEL=openai/gpt-4o-mini
 ```
+
+`GBRAIN_EMBEDDING_DIMENSIONS` defaults to `1536` when unset. Set it before `gbrain init` for a new brain so the `content_chunks.embedding` column is created with the same vector size that the embedding model returns. For the default OpenAI embedding model, omit the variable or set `GBRAIN_EMBEDDING_DIMENSIONS=1536`.
 
 Then run the normal indexing and query flow:
 
@@ -288,7 +291,8 @@ The same settings can also live in `~/.gbrain/config.json`; environment variable
 {
   "openrouter_api_key": "sk-or-...",
   "embedding_provider": "openrouter",
-  "embedding_model": "openai/text-embedding-3-large",
+  "embedding_model": "qwen/qwen3-embedding-8b",
+  "embedding_dimensions": 4096,
   "expansion_provider": "openrouter",
   "expansion_model": "openai/gpt-4o-mini"
 }
@@ -301,7 +305,7 @@ export OPENROUTER_HTTP_REFERER=https://github.com/KVSocial/gbrain
 export OPENROUTER_APP_TITLE=GBrain
 ```
 
-This is experimental branch behavior, not the original upstream default. Keep the embedding model dimension-compatible until the database schema supports mixed vector sizes.
+This is experimental branch behavior, not the original upstream default. Keep the embedding model dimension-compatible with the brain schema; existing brains keep their current vector column size.
 
 ### GBrain without OpenClaw
 
@@ -584,8 +588,8 @@ content_chunks           Chunked content with embeddings
   page_id (FK)           Links to pages
   chunk_text             The chunk content
   chunk_source           'compiled_truth' or 'timeline'
-  embedding (vector)     1536-dim from text-embedding-3-large
-  HNSW index             Cosine similarity search
+  embedding (vector)     Configurable dimensions, default 1536
+  HNSW index             Cosine similarity search for <=2000-dimensional vectors
 
 links                    Cross-references between pages
   from_page_id, to_page_id
@@ -741,7 +745,7 @@ For a brain with ~7,500 pages:
 | Page text (compiled_truth + timeline) | ~150MB |
 | JSONB frontmatter + indexes | ~70MB |
 | Content chunks (~22K, text) | ~80MB |
-| Embeddings (22K x 1536 floats) | ~134MB |
+| Embeddings (22K x 1536 floats, default) | ~134MB |
 | HNSW index overhead | ~270MB |
 | Links, tags, timeline, versions | ~50MB |
 | **Total** | **~750MB** |

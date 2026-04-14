@@ -17,6 +17,7 @@ export interface GBrainConfig {
   anthropic_api_key?: string;
   embedding_provider?: 'openai' | 'openrouter';
   embedding_model?: string;
+  embedding_dimensions?: number | string;
   expansion_provider?: 'anthropic' | 'openrouter';
   expansion_model?: string;
   storage?: StorageConfig;
@@ -52,6 +53,7 @@ export function loadConfig(): GBrainConfig | null {
     ...(process.env.ANTHROPIC_API_KEY ? { anthropic_api_key: process.env.ANTHROPIC_API_KEY } : {}),
     ...(process.env.GBRAIN_EMBEDDING_PROVIDER ? { embedding_provider: process.env.GBRAIN_EMBEDDING_PROVIDER } : {}),
     ...(process.env.GBRAIN_EMBEDDING_MODEL ? { embedding_model: process.env.GBRAIN_EMBEDDING_MODEL } : {}),
+    ...(process.env.GBRAIN_EMBEDDING_DIMENSIONS ? { embedding_dimensions: process.env.GBRAIN_EMBEDDING_DIMENSIONS } : {}),
     ...(process.env.GBRAIN_EXPANSION_PROVIDER ? { expansion_provider: process.env.GBRAIN_EXPANSION_PROVIDER } : {}),
     ...(process.env.GBRAIN_EXPANSION_MODEL ? { expansion_model: process.env.GBRAIN_EXPANSION_MODEL } : {}),
   };

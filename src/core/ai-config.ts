@@ -40,8 +40,21 @@ export function resolveEmbeddingConfig(): EmbeddingProviderConfig {
       || (provider === 'openrouter'
         ? DEFAULT_OPENROUTER_EMBEDDING_MODEL
         : DEFAULT_OPENAI_EMBEDDING_MODEL),
-    dimensions: DEFAULT_EMBEDDING_DIMENSIONS,
+    dimensions: resolveEmbeddingDimensions(config?.embedding_dimensions),
   };
+}
+
+export function resolveEmbeddingDimensions(configValue?: number | string): number {
+  const raw = process.env.GBRAIN_EMBEDDING_DIMENSIONS ?? configValue;
+  if (raw === undefined || raw === null || raw === '') return DEFAULT_EMBEDDING_DIMENSIONS;
+
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(
+      `GBRAIN_EMBEDDING_DIMENSIONS must be a positive integer; got ${JSON.stringify(raw)}`,
+    );
+  }
+  return parsed;
 }
 
 export function resolveExpansionConfig(): ExpansionProviderConfig {

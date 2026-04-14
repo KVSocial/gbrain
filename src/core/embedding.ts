@@ -2,7 +2,7 @@
  * Embedding Service
  * Ported from production Ruby implementation (embedding_service.rb, 190 LOC)
  *
- * OpenAI or OpenRouter embedding provider at 1536 dimensions.
+ * OpenAI or OpenRouter embedding provider with configurable dimensions.
  * Retry with exponential backoff (4s base, 120s cap, 5 retries).
  * 8000 character input truncation.
  */

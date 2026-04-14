@@ -3,6 +3,7 @@ import type { BrainEngine } from './engine.ts';
 import { MAX_SEARCH_LIMIT, clampSearchLimit } from './engine.ts';
 import { runMigrations } from './migrate.ts';
 import { SCHEMA_SQL } from './schema-embedded.ts';
+import { schemaWithEmbeddingDimensions } from './schema-dimensions.ts';
 import type {
   Page, PageInput, PageFilters, PageType,
   Chunk, ChunkInput,
@@ -62,7 +63,7 @@ export class PostgresEngine implements BrainEngine {
     // on DDL statements (DROP TRIGGER + CREATE TRIGGER acquire AccessExclusiveLock)
     await conn`SELECT pg_advisory_lock(42)`;
     try {
-      await conn.unsafe(SCHEMA_SQL);
+      await conn.unsafe(schemaWithEmbeddingDimensions(SCHEMA_SQL));
 
       // Run any pending migrations automatically
       const { applied } = await runMigrations(this);

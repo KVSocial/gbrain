@@ -4,6 +4,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { saveConfig, type GBrainConfig } from '../core/config.ts';
 import { createEngine } from '../core/engine-factory.ts';
+import { resolveEmbeddingDimensions } from '../core/ai-config.ts';
 
 export async function runInit(args: string[]) {
   const isSupabase = args.includes('--supabase');
@@ -67,6 +68,7 @@ async function initPGLite(opts: { jsonOutput: boolean; apiKey: string | null; cu
     engine: 'pglite',
     database_path: dbPath,
     ...(opts.apiKey ? { openai_api_key: opts.apiKey } : {}),
+    ...embeddingConfigFromEnv(),
   };
   saveConfig(config);
 
@@ -138,6 +140,7 @@ async function initPostgres(opts: { databaseUrl: string; jsonOutput: boolean; ap
     engine: 'postgres',
     database_url: databaseUrl,
     ...(opts.apiKey ? { openai_api_key: opts.apiKey } : {}),
+    ...embeddingConfigFromEnv(),
   };
   saveConfig(config);
   console.log('Config saved to ~/.gbrain/config.json');
@@ -151,6 +154,18 @@ async function initPostgres(opts: { databaseUrl: string; jsonOutput: boolean; ap
     console.log(`\nBrain ready. ${stats.page_count} pages. Engine: Postgres (Supabase).`);
     console.log('Next: gbrain import <dir>');
   }
+}
+
+function embeddingConfigFromEnv(): Partial<GBrainConfig> {
+  return {
+    ...(process.env.GBRAIN_EMBEDDING_PROVIDER
+      ? { embedding_provider: process.env.GBRAIN_EMBEDDING_PROVIDER as GBrainConfig['embedding_provider'] }
+      : {}),
+    ...(process.env.GBRAIN_EMBEDDING_MODEL ? { embedding_model: process.env.GBRAIN_EMBEDDING_MODEL } : {}),
+    ...(process.env.GBRAIN_EMBEDDING_DIMENSIONS
+      ? { embedding_dimensions: resolveEmbeddingDimensions() }
+      : {}),
+  };
 }
 
 /**
