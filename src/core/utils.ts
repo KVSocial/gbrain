@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import type { Page, PageInput, PageType, Chunk, SearchResult } from './types.ts';
+import { safeScore } from './search/scores.ts';
 
 /**
  * Validate and normalize a slug. Slugs are lowercased repo-relative paths.
@@ -67,7 +68,7 @@ export function rowToSearchResult(row: Record<string, unknown>): SearchResult {
     chunk_source: row.chunk_source as 'compiled_truth' | 'timeline',
     chunk_id: row.chunk_id as number,
     chunk_index: row.chunk_index as number,
-    score: Number(row.score),
+    score: safeScore(row.score),
     stale: Boolean(row.stale),
   };
 }

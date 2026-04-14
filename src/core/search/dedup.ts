@@ -10,6 +10,7 @@
  */
 
 import type { SearchResult } from '../types.ts';
+import { compareSearchScoreDesc, safeScore } from './scores.ts';
 
 const COSINE_DEDUP_THRESHOLD = 0.85;
 const MAX_TYPE_RATIO = 0.6;
@@ -65,11 +66,11 @@ function dedupBySource(results: SearchResult[]): SearchResult[] {
 
   const kept: SearchResult[] = [];
   for (const chunks of byPage.values()) {
-    chunks.sort((a, b) => b.score - a.score);
+    chunks.sort(compareSearchScoreDesc);
     kept.push(...chunks.slice(0, 3));
   }
 
-  return kept.sort((a, b) => b.score - a.score);
+  return kept.sort(compareSearchScoreDesc);
 }
 
 /**
@@ -87,7 +88,7 @@ function dedupByTextSimilarity(results: SearchResult[], threshold: number): Sear
       const kWords = new Set(k.chunk_text.toLowerCase().split(/\s+/));
       const intersection = new Set([...rWords].filter(w => kWords.has(w)));
       const union = new Set([...rWords, ...kWords]);
-      const jaccard = intersection.size / union.size;
+      const jaccard = union.size > 0 ? intersection.size / union.size : 0;
 
       if (jaccard > threshold) {
         tooSimilar = true;
@@ -162,7 +163,7 @@ function guaranteeCompiledTruth(results: SearchResult[], preDedup: SearchResult[
     // Find the best compiled_truth chunk from pre-dedup input for this page
     const candidate = preDedup
       .filter(r => r.slug === slug && r.chunk_source === 'compiled_truth')
-      .sort((a, b) => b.score - a.score)[0];
+      .sort(compareSearchScoreDesc)[0];
 
     if (!candidate) continue;
 
@@ -170,7 +171,7 @@ function guaranteeCompiledTruth(results: SearchResult[], preDedup: SearchResult[
     const lowestIdx = output.reduce((minIdx, r, idx) => {
       if (r.slug !== slug) return minIdx;
       if (minIdx === -1) return idx;
-      return r.score < output[minIdx].score ? idx : minIdx;
+      return safeScore(r.score) < safeScore(output[minIdx].score) ? idx : minIdx;
     }, -1);
 
     if (lowestIdx !== -1) {

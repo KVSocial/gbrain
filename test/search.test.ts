@@ -5,6 +5,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { rrfFusion, cosineSimilarity } from '../src/core/search/hybrid.ts';
+import { formatSearchScore, safeScore } from '../src/core/search/scores.ts';
 import type { SearchResult } from '../src/core/types.ts';
 
 function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
@@ -107,6 +108,13 @@ describe('rrfFusion', () => {
     expect(k30[0].score).toBe(1.0);
     expect(k90[0].score).toBe(1.0);
   });
+
+  test('does not emit NaN when RRF K is invalid', () => {
+    const results = rrfFusion([[makeResult({ chunk_source: 'timeline' })]], 0);
+    expect(results).toHaveLength(1);
+    expect(Number.isFinite(results[0].score)).toBe(true);
+    expect(results[0].score).not.toBeNaN();
+  });
 });
 
 describe('cosineSimilarity', () => {
@@ -149,6 +157,32 @@ describe('cosineSimilarity', () => {
     a[0] = 1.0;
     b[5] = 1.0;
     expect(cosineSimilarity(a, b)).toBe(0);
+  });
+
+  test('dimension mismatch returns 0.0 instead of NaN', () => {
+    const a = new Float32Array([1, 2, 3]);
+    const b = new Float32Array([1, 2]);
+    expect(cosineSimilarity(a, b)).toBe(0);
+  });
+
+  test('non-finite vector values return 0.0 instead of NaN', () => {
+    const a = new Float32Array([1, Number.NaN, 3]);
+    const b = new Float32Array([1, 2, 3]);
+    expect(cosineSimilarity(a, b)).toBe(0);
+  });
+});
+
+describe('search score safety', () => {
+  test('safeScore falls back to 0 for non-finite scores', () => {
+    expect(safeScore(Number.NaN)).toBe(0);
+    expect(safeScore(undefined)).toBe(0);
+    expect(safeScore(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+
+  test('query score output never formats as NaN', () => {
+    const line = `[${formatSearchScore(Number.NaN)}] page -- chunk`;
+    expect(line).toBe('[0.0000] page -- chunk');
+    expect(line).not.toContain('NaN');
   });
 });
 

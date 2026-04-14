@@ -6,6 +6,7 @@ import type { BrainEngine } from './core/engine.ts';
 import { operations, OperationError } from './core/operations.ts';
 import type { Operation, OperationContext } from './core/operations.ts';
 import { serializeMarkdown } from './core/markdown.ts';
+import { formatSearchScore } from './core/search/scores.ts';
 import { VERSION } from './version.ts';
 
 // Build CLI name -> operation lookup
@@ -171,7 +172,7 @@ function formatResult(opName: string, result: unknown): string {
       const results = result as any[];
       if (results.length === 0) return 'No results.\n';
       return results.map(r =>
-        `[${r.score?.toFixed(4) || '?'}] ${r.slug} -- ${r.chunk_text?.slice(0, 100) || ''}${r.stale ? ' (stale)' : ''}`,
+        `[${formatSearchScore(r.score)}] ${r.slug} -- ${r.chunk_text?.slice(0, 100) || ''}${r.stale ? ' (stale)' : ''}`,
       ).join('\n') + '\n';
     }
     case 'get_tags': {

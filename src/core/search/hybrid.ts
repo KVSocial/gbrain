@@ -16,6 +16,7 @@ import { embed } from '../embedding.ts';
 import { canGenerateEmbeddings } from '../ai-config.ts';
 import { dedupResults } from './dedup.ts';
 import { autoDetectDetail } from './intent.ts';
+import { compareSearchScoreDesc, safeScore } from './scores.ts';
 
 const RRF_K = 60;
 const COMPILED_TRUTH_BOOST = 2.0;
@@ -117,16 +118,17 @@ export async function hybridSearch(
  */
 export function rrfFusion(lists: SearchResult[][], k: number, applyBoost = true): SearchResult[] {
   const scores = new Map<string, { result: SearchResult; score: number }>();
+  const rrfK = Number.isFinite(k) && k > 0 ? k : RRF_K;
 
   for (const list of lists) {
     for (let rank = 0; rank < list.length; rank++) {
       const r = list[rank];
-      const key = `${r.slug}:${r.chunk_id ?? r.chunk_text.slice(0, 50)}`;
+      const key = `${r.slug}:${r.chunk_id ?? String(r.chunk_text || '').slice(0, 50)}`;
       const existing = scores.get(key);
-      const rrfScore = 1 / (k + rank);
+      const rrfScore = safeScore(1 / (rrfK + rank));
 
       if (existing) {
-        existing.score += rrfScore;
+        existing.score = safeScore(existing.score + rrfScore);
       } else {
         scores.set(key, { result: r, score: rrfScore });
       }
@@ -137,26 +139,25 @@ export function rrfFusion(lists: SearchResult[][], k: number, applyBoost = true)
   if (entries.length === 0) return [];
 
   // Normalize to 0-1 by dividing by observed max
-  const maxScore = Math.max(...entries.map(e => e.score));
-  if (maxScore > 0) {
-    for (const e of entries) {
-      const rawScore = e.score;
-      e.score = e.score / maxScore;
+  const maxScore = safeScore(Math.max(...entries.map(e => safeScore(e.score))));
+  for (const e of entries) {
+    const rawScore = safeScore(e.score);
+    e.score = maxScore > 0 ? safeScore(rawScore / maxScore) : 0;
 
-      // Apply compiled truth boost after normalization (skip for detail=high)
-      const boost = applyBoost && e.result.chunk_source === 'compiled_truth' ? COMPILED_TRUTH_BOOST : 1.0;
-      e.score *= boost;
+    // Apply compiled truth boost after normalization (skip for detail=high)
+    const boost = applyBoost && e.result.chunk_source === 'compiled_truth' ? COMPILED_TRUTH_BOOST : 1.0;
+    e.score = safeScore(e.score * boost);
 
-      if (DEBUG) {
-        console.error(`[search-debug] ${e.result.slug}:${e.result.chunk_id} rrf_raw=${rawScore.toFixed(4)} rrf_norm=${(rawScore / maxScore).toFixed(4)} boost=${boost} boosted=${e.score.toFixed(4)} source=${e.result.chunk_source}`);
-      }
+    if (DEBUG) {
+      const normScore = maxScore > 0 ? safeScore(rawScore / maxScore) : 0;
+      console.error(`[search-debug] ${e.result.slug}:${e.result.chunk_id} rrf_raw=${rawScore.toFixed(4)} rrf_norm=${normScore.toFixed(4)} boost=${boost} boosted=${e.score.toFixed(4)} source=${e.result.chunk_source}`);
     }
   }
 
   // Sort by boosted score descending
   return entries
-    .sort((a, b) => b.score - a.score)
-    .map(({ result, score }) => ({ ...result, score }));
+    .sort(compareSearchScoreDesc)
+    .map(({ result, score }) => ({ ...result, score: safeScore(score) }));
 }
 
 /**
@@ -185,31 +186,33 @@ async function cosineReScore(
   if (embeddingMap.size === 0) return results;
 
   // Normalize RRF scores to 0-1 for blending
-  const maxRrf = Math.max(...results.map(r => r.score));
+  const maxRrf = safeScore(Math.max(...results.map(r => safeScore(r.score))));
 
   return results.map(r => {
     const chunkEmb = r.chunk_id != null ? embeddingMap.get(r.chunk_id) : undefined;
-    if (!chunkEmb) return r;
+    if (!chunkEmb) return { ...r, score: safeScore(r.score) };
 
     const cosine = cosineSimilarity(queryEmbedding, chunkEmb);
-    const normRrf = maxRrf > 0 ? r.score / maxRrf : 0;
-    const blended = 0.7 * normRrf + 0.3 * cosine;
+    const normRrf = maxRrf > 0 ? safeScore(r.score) / maxRrf : 0;
+    const blended = safeScore(0.7 * safeScore(normRrf) + 0.3 * safeScore(cosine));
 
     if (DEBUG) {
       console.error(`[search-debug] ${r.slug}:${r.chunk_id} cosine=${cosine.toFixed(4)} norm_rrf=${normRrf.toFixed(4)} blended=${blended.toFixed(4)}`);
     }
 
     return { ...r, score: blended };
-  }).sort((a, b) => b.score - a.score);
+  }).sort(compareSearchScoreDesc);
 }
 
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length) return 0;
   let dot = 0, magA = 0, magB = 0;
   for (let i = 0; i < a.length; i++) {
+    if (!Number.isFinite(a[i]) || !Number.isFinite(b[i])) return 0;
     dot += a[i] * b[i];
     magA += a[i] * a[i];
     magB += b[i] * b[i];
   }
   const denom = Math.sqrt(magA) * Math.sqrt(magB);
-  return denom === 0 ? 0 : dot / denom;
+  return denom === 0 ? 0 : safeScore(dot / denom);
 }
